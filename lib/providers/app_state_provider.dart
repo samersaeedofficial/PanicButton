@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/alert_log.dart';
@@ -28,6 +29,7 @@ class AppStateProvider extends ChangeNotifier {
   List<AlertLog> _logs = [];
   HardwareStatus _hardwareStatus = HardwareStatus(lastUpdated: DateTime.now());
   LocationSnapshot? _currentLocation;
+  final List<LatLng> _routePoints = [];
   bool _continuousLocationSharing = false;
   bool _backgroundServiceRunning = false;
   bool _isInitialized = false;
@@ -58,6 +60,17 @@ class AppStateProvider extends ChangeNotifier {
   HardwareStatus get hardwareStatus => _hardwareStatus;
   LocationSnapshot? get currentLocation =>
       _currentLocation ?? locationService.lastKnownOutdoorLocation;
+  List<LatLng> get routePoints => List.unmodifiable(_routePoints);
+
+  double get totalDistanceKm {
+    if (_routePoints.length < 2) return 0.0;
+    const distance = Distance();
+    double totalMeters = 0;
+    for (int i = 0; i < _routePoints.length - 1; i++) {
+      totalMeters += distance.as(LengthUnit.Meter, _routePoints[i], _routePoints[i + 1]);
+    }
+    return totalMeters / 1000.0;
+  }
   bool get continuousLocationSharing => _continuousLocationSharing;
   bool get backgroundServiceRunning => _backgroundServiceRunning;
   bool get isInitialized => _isInitialized;
@@ -120,6 +133,13 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> refreshData() async {
     _members = await DatabaseService.instance.getFamilyMembers();
     _logs = await DatabaseService.instance.getAlertLogs();
+    if (_routePoints.isEmpty) {
+      for (final log in _logs.reversed) {
+        if (log.latitude != null && log.longitude != null) {
+          _addRoutePoint(log.latitude!, log.longitude!);
+        }
+      }
+    }
     notifyListeners();
   }
 
@@ -180,11 +200,58 @@ class AppStateProvider extends ChangeNotifier {
     if (enabled) {
       locationService.startContinuousTracking((snap) {
         _currentLocation = snap;
+        _addRoutePoint(snap.latitude, snap.longitude);
         notifyListeners();
       });
     } else {
       locationService.stopContinuousTracking();
     }
+    notifyListeners();
+  }
+
+  void _addRoutePoint(double lat, double lng) {
+    final pt = LatLng(lat, lng);
+    if (_routePoints.isEmpty) {
+      _routePoints.add(pt);
+    } else {
+      const distance = Distance();
+      final last = _routePoints.last;
+      if (distance.as(LengthUnit.Meter, last, pt) >= 4) {
+        _routePoints.add(pt);
+      }
+    }
+  }
+
+  Future<void> requestCurrentLocation() async {
+    final loc = await locationService.getBestAvailableLocation();
+    if (loc != null) {
+      _currentLocation = loc;
+      _addRoutePoint(loc.latitude, loc.longitude);
+      notifyListeners();
+    }
+  }
+
+  void setSimulatedLocation(double lat, double lng) {
+    _currentLocation = LocationSnapshot(
+      latitude: lat,
+      longitude: lng,
+      accuracy: 8.0,
+      timestamp: DateTime.now(),
+      isLastKnownFallback: false,
+    );
+    _addRoutePoint(lat, lng);
+    notifyListeners();
+  }
+
+  void simulateJourneyStep() {
+    final baseLat = _currentLocation?.latitude ?? 33.6844;
+    final baseLng = _currentLocation?.longitude ?? 73.0479;
+    final step = (_routePoints.length + 1) * 0.002;
+    setSimulatedLocation(baseLat + step, baseLng + step);
+  }
+
+  void clearRouteHistory() {
+    _routePoints.clear();
     notifyListeners();
   }
 
