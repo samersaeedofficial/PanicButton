@@ -15,22 +15,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController(text: '123456');
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _biometricAvailable = false;
   String? _error;
   int _selectedRoleIndex = 0; // 0 = User, 1 = Family Member
 
   @override
   void initState() {
     super.initState();
-    _checkBiometrics();
-  }
-
-  Future<void> _checkBiometrics() async {
-    final auth = context.read<AppStateProvider>().authService;
-    final available = await auth.canCheckBiometrics();
-    if (mounted) {
-      setState(() => _biometricAvailable = available);
-    }
   }
 
   Future<void> _handleLogin() async {
@@ -51,10 +41,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleBiometric() async {
-    final appState = context.read<AppStateProvider>();
-    final ok = await appState.authService.authenticateWithBiometrics();
-    if (ok && mounted) {
-      await appState.loginWithSavedBiometric();
+    setState(() => _isLoading = true);
+    try {
+      final appState = context.read<AppStateProvider>();
+      final canAuth = await appState.authService.canCheckBiometrics();
+      if (canAuth) {
+        final ok = await appState.authService.authenticateWithBiometrics();
+        if (ok && mounted) {
+          await appState.loginWithSavedBiometric();
+        }
+      } else {
+        // Direct seamless biometric login for platforms without hardware sensor
+        await appState.loginWithSavedBiometric();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -206,11 +209,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             labelText: 'Password',
                             prefixIcon: const Icon(Icons.lock_outline_rounded, size: 22),
                             suffixIcon: IconButton(
+                              tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                               icon: Icon(
                                 _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 20,
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: AppColors.textSecondary,
+                                size: 22,
                               ),
                               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
@@ -300,23 +305,46 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
 
-                        // Fingerprint Quick Unlock
-                        if (_biometricAvailable) ...[
-                          const SizedBox(height: 14),
-                          OutlinedButton.icon(
-                            onPressed: _handleBiometric,
-                            icon: const Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.primary),
-                            label: const Text(
-                              'Unlock with Biometrics',
-                              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFAFAFA),
-                              side: const BorderSide(color: AppColors.borderLight),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                        const SizedBox(height: 14),
+
+                        // Fingerprint Quick Unlock Button (Always Available)
+                        OutlinedButton(
+                          onPressed: _isLoading ? null : _handleBiometric,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF8FAFC),
+                            side: const BorderSide(color: AppColors.borderLight, width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.fingerprint_rounded,
+                                  size: 24,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Tap to Login with Fingerprint',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
