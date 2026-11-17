@@ -80,9 +80,9 @@ class _DashboardTabState extends State<DashboardTab> {
         _HeroSosButton(
           onTap: () async {
             final config = state.buttonConfigs[ButtonPressType.longPress]!;
-            final log = await state.triggerButtonAction(config);
+            await state.triggerButtonAction(config);
             if (context.mounted) {
-              _showActionFeedback(context, log.message, AppColors.primary);
+              _showActionFeedback(context, 'LOUD EMERGENCY SIREN TRIGGERED!', AppColors.primary);
             }
           },
         ),
@@ -326,36 +326,95 @@ class _DashboardTabState extends State<DashboardTab> {
                       ActionChip(
                         avatar: const Icon(Icons.bluetooth, size: 16, color: Colors.blue),
                         label: const Text('Simulate BLE'),
-                        onPressed: () => state.hardwareService.simulateConnect(
-                          mode: ConnectionMode.bluetooth,
-                        ),
+                        onPressed: () {
+                          state.hardwareService.simulateConnect(
+                            mode: ConnectionMode.bluetooth,
+                            satellites: 9,
+                            battery: 88,
+                          );
+                          _showActionFeedback(
+                            context,
+                            'Simulated: ESP32 Connected via Bluetooth BLE (9 Sats, 88% Bat)',
+                            AppColors.infoBlue,
+                          );
+                        },
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.wifi, size: 16, color: Colors.teal),
                         label: const Text('Simulate Wi-Fi AP'),
-                        onPressed: () => state.hardwareService.simulateConnect(
-                          mode: ConnectionMode.esp32Ap,
-                        ),
+                        onPressed: () {
+                          state.hardwareService.simulateConnect(
+                            mode: ConnectionMode.esp32Ap,
+                            satellites: 11,
+                            battery: 95,
+                          );
+                          _showActionFeedback(
+                            context,
+                            'Simulated: ESP32 Connected via Wi-Fi AP (11 Sats, 95% Bat)',
+                            Colors.teal,
+                          );
+                        },
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.touch_app_outlined, size: 16, color: Colors.green),
                         label: const Text('1x Click (Safe)'),
-                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.single),
+                        onPressed: () async {
+                          final config = state.buttonConfigs[ButtonPressType.single]!;
+                          final log = await state.triggerButtonAction(config);
+                          if (context.mounted) {
+                            _showActionFeedback(
+                              context,
+                              '1x Click Executed: ${log.message}',
+                              AppColors.safeGreenDark,
+                            );
+                          }
+                        },
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.double_arrow_rounded, size: 16, color: Colors.orange),
                         label: const Text('2x Click (Silent)'),
-                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.doublePress),
+                        onPressed: () async {
+                          final config = state.buttonConfigs[ButtonPressType.doublePress]!;
+                          final log = await state.triggerButtonAction(config);
+                          if (context.mounted) {
+                            _showActionFeedback(
+                              context,
+                              '2x Click Executed: ${log.message}',
+                              AppColors.silentAmberDark,
+                            );
+                          }
+                        },
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.timer_outlined, size: 16, color: Colors.red),
                         label: const Text('Long Press (Siren)'),
-                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.longPress),
+                        onPressed: () async {
+                          final config = state.buttonConfigs[ButtonPressType.longPress]!;
+                          final log = await state.triggerButtonAction(config);
+                          if (context.mounted) {
+                            _showActionFeedback(
+                              context,
+                              'Long Press Executed: ${log.message}',
+                              AppColors.primary,
+                            );
+                          }
+                        },
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.link_off_rounded, size: 16, color: Colors.purple),
                         label: const Text('Simulate Snatch'),
-                        onPressed: () => state.hardwareService.simulateAntiSnatchDisconnect(),
+                        onPressed: () async {
+                          state.hardwareService.simulateAntiSnatchDisconnect();
+                          final log = await state.alertDispatcher.dispatchAntiSnatch(state.members);
+                          state.addAlertLogDirectly(log);
+                          if (context.mounted) {
+                            _showActionFeedback(
+                              context,
+                              'Anti-Snatch Disconnect Alert Triggered!',
+                              AppColors.snatchPurple,
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -371,18 +430,25 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void _showActionFeedback(BuildContext context, String message, Color color) {
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600))),
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
           ],
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -613,77 +679,82 @@ class _HeroSosButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderLight),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppColors.sosGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.45),
-                    blurRadius: 28,
-                    spreadRadius: 6,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 48),
-                    SizedBox(height: 4),
-                    Text(
-                      'SOS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                      ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          child: Column(
+            children: [
+              Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.sosGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.45),
+                      blurRadius: 28,
+                      spreadRadius: 6,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 48),
+                      SizedBox(height: 4),
+                      Text(
+                        'SOS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 18),
+              const Text(
+                'LOUD EMERGENCY SIREN',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryDark,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Tap here or long press hardware button to sound loud siren & dispatch SOS',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-          const Text(
-            'LOUD EMERGENCY SIREN',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primaryDark,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Triggers loud hardware alarm, live audio recording & instant SOS dispatch',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -709,53 +780,57 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: Colors.white,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.borderLight),
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                gradient: gradient,
-                borderRadius: BorderRadius.circular(12),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-              child: Icon(icon, color: Colors.white, size: 24),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.white, size: 24),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-                height: 1.3,
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

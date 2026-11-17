@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
@@ -34,24 +35,30 @@ class HardwareService {
   Timer? _wifiPollTimer;
 
   Future<void> init() async {
-    // Monitor Bluetooth adapter state for auto-connect
-    _bleStateSub = FlutterBluePlus.adapterState.listen((state) {
-      if (state == BluetoothAdapterState.on) {
-        _startBleAutoConnect();
-      } else if (!_currentStatus.isConnected ||
-          _currentStatus.mode == ConnectionMode.bluetooth) {
-        _handleDisconnect(wasConnected: _currentStatus.isConnected);
-      }
-    });
+    // Monitor Bluetooth adapter state for auto-connect on supported platforms
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
+      try {
+        _bleStateSub = FlutterBluePlus.adapterState.listen((state) {
+          if (state == BluetoothAdapterState.on) {
+            _startBleAutoConnect();
+          } else if (!_currentStatus.isConnected ||
+              _currentStatus.mode == ConnectionMode.bluetooth) {
+            _handleDisconnect(wasConnected: _currentStatus.isConnected);
+          }
+        });
+      } catch (_) {}
+    }
 
     // Monitor Wi-Fi / Hotspot connectivity
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
-      if (results.contains(ConnectivityResult.wifi)) {
-        _startWifiBridge();
-      } else {
-        _stopWifiBridge();
-      }
-    });
+    try {
+      _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+        if (results.contains(ConnectivityResult.wifi)) {
+          _startWifiBridge();
+        } else {
+          _stopWifiBridge();
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _startBleAutoConnect() async {

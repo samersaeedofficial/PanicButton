@@ -51,14 +51,12 @@ class AlertDispatcherService {
         alertType = AlertType.silentSos;
         message = 'SILENT SOS! User needs help discreetly.';
         await hardwareService.sendCommandToEsp32('BUZZER_OFF');
-        audioPath = await audioService.recordPanicClip(durationSeconds: 8);
         break;
 
       case ButtonActionType.loudSiren:
         alertType = AlertType.loudSiren;
         message = 'EMERGENCY! Loud Siren triggered.';
         await hardwareService.sendCommandToEsp32('SIREN_ON');
-        audioPath = await audioService.recordPanicClip(durationSeconds: 10);
         break;
 
       case ButtonActionType.shareLocation:
@@ -69,7 +67,6 @@ class AlertDispatcherService {
       case ButtonActionType.recordAudioAlert:
         alertType = AlertType.silentSos;
         message = 'Audio panic alert recorded and sent.';
-        audioPath = await audioService.recordPanicClip(durationSeconds: 10);
         break;
 
       case ButtonActionType.callMember:
@@ -111,6 +108,30 @@ class AlertDispatcherService {
       title: alertType.label,
       body: message,
     );
+
+    // Audio recording runs asynchronously in background so UI responds instantly
+    if (config.actionType == ButtonActionType.loudSiren ||
+        config.actionType == ButtonActionType.silentSos ||
+        config.actionType == ButtonActionType.recordAudioAlert) {
+      final duration = config.actionType == ButtonActionType.silentSos ? 8 : 10;
+      audioService.recordPanicClip(durationSeconds: duration).then((recordedPath) async {
+        if (recordedPath != null) {
+          final updated = AlertLog(
+            id: log.id,
+            type: log.type,
+            timestamp: log.timestamp,
+            latitude: log.latitude,
+            longitude: log.longitude,
+            isLastKnownLocation: log.isLastKnownLocation,
+            audioPath: recordedPath,
+            message: log.message,
+            sentVia: log.sentVia,
+          );
+          await DatabaseService.instance.insertAlertLog(updated);
+        }
+      });
+    }
+
     return log;
   }
 

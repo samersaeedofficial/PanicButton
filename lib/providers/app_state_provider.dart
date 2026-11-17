@@ -72,38 +72,49 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   Future<void> init() async {
+    // 1. Always subscribe to event streams first
+    _hwSub = hardwareService.statusStream.listen((status) {
+      _hardwareStatus = status;
+      notifyListeners();
+    });
+
+    _btnSub = hardwareService.buttonPressStream.listen((pressType) async {
+      final config = _buttonConfigs[pressType];
+      if (config != null) {
+        await triggerButtonAction(config);
+      }
+    });
+
+    _snatchSub = hardwareService.antiSnatchStream.listen((_) async {
+      final log = await alertDispatcher.dispatchAntiSnatch(_members);
+      _logs.insert(0, log);
+      notifyListeners();
+    });
+
+    // 2. Load cached configs and local DB
+    try {
+      await _loadButtonConfigs();
+      _currentUser = await authService.getSavedUser();
+      await refreshData();
+    } catch (_) {}
+
+    // 3. Hardware & Location services
     try {
       await locationService.init();
-      await hardwareService.init();
-      _currentUser = await authService.getSavedUser();
-      await _loadButtonConfigs();
-      await refreshData();
-
-      _hwSub = hardwareService.statusStream.listen((status) {
-        _hardwareStatus = status;
-        notifyListeners();
-      });
-
-      _btnSub = hardwareService.buttonPressStream.listen((pressType) async {
-        final config = _buttonConfigs[pressType];
-        if (config != null) {
-          await triggerButtonAction(config);
-        }
-      });
-
-      _snatchSub = hardwareService.antiSnatchStream.listen((_) async {
-        final log = await alertDispatcher.dispatchAntiSnatch(_members);
-        _logs.insert(0, log);
-        notifyListeners();
-      });
-
       _currentLocation = await locationService.getBestAvailableLocation();
-    } catch (_) {
-      // Ensure app still opens if a mobile-only plugin is unavailable on desktop
-    } finally {
-      _isInitialized = true;
-      notifyListeners();
-    }
+    } catch (_) {}
+
+    try {
+      await hardwareService.init();
+    } catch (_) {}
+
+    _isInitialized = true;
+    notifyListeners();
+  }
+
+  void addAlertLogDirectly(AlertLog log) {
+    _logs.insert(0, log);
+    notifyListeners();
   }
 
   Future<void> refreshData() async {
