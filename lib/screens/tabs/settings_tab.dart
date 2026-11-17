@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../models/button_action_config.dart';
@@ -250,7 +251,7 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 }
 
-class _ButtonConfigCard extends StatelessWidget {
+class _ButtonConfigCard extends StatefulWidget {
   final String badgeLabel;
   final Color badgeColor;
   final String title;
@@ -268,7 +269,38 @@ class _ButtonConfigCard extends StatelessWidget {
   });
 
   @override
+  State<_ButtonConfigCard> createState() => _ButtonConfigCardState();
+}
+
+class _ButtonConfigCardState extends State<_ButtonConfigCard> {
+  late final TextEditingController _phoneCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneCtrl = TextEditingController(text: widget.config.targetMemberId ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _ButtonConfigCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.config.targetMemberId != widget.config.targetMemberId &&
+        _phoneCtrl.text != widget.config.targetMemberId) {
+      _phoneCtrl.text = widget.config.targetMemberId ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final config = widget.config;
+    final state = widget.state;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -284,21 +316,21 @@ class _ButtonConfigCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
+                  color: widget.badgeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  badgeLabel,
+                  widget.badgeLabel,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: badgeColor,
+                    color: widget.badgeColor,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Text(
-                title,
+                widget.title,
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
               ),
             ],
@@ -331,7 +363,7 @@ class _ButtonConfigCard extends StatelessWidget {
           ),
 
           // Hold duration slider (for longPress)
-          if (showHoldDuration) ...[
+          if (widget.showHoldDuration) ...[
             const SizedBox(height: 14),
             Row(
               children: [
@@ -375,28 +407,69 @@ class _ButtonConfigCard extends StatelessWidget {
 
           // Call Member Target Selector
           if (config.actionType == ButtonActionType.callMember) ...[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: state.members.any((m) => m.id == config.targetMemberId)
-                  ? config.targetMemberId
-                  : null,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Family Member to Dial',
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            const SizedBox(height: 14),
+            if (state.members.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: state.members.any((m) => m.id == config.targetMemberId)
+                    ? config.targetMemberId
+                    : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Select Guardian to Call',
+                  prefixIcon: Icon(Icons.person_pin_rounded),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                hint: const Text('Choose a family member...'),
+                items: state.members.map((m) {
+                  return DropdownMenuItem(
+                    value: m.id,
+                    child: Text(
+                      '${m.name} (${m.phone})',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    final target = state.members.where((m) => m.id == val).firstOrNull;
+                    _phoneCtrl.text = target?.phone ?? '';
+                    state.updateButtonConfig(config.copyWith(targetMemberId: val));
+                  }
+                },
               ),
-              items: state.members.map((m) {
-                return DropdownMenuItem(
-                  value: m.id,
-                  child: Text(
-                    '${m.name} (${m.phone})',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                );
-              }).toList(),
+              const SizedBox(height: 10),
+            ],
+
+            // Direct Phone Number Field (Works even if no members added!)
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.text,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9+ \-\(\)]')),
+              ],
+              decoration: InputDecoration(
+                labelText: 'Or Emergency Phone Number to Dial',
+                hintText: 'e.g. +923001234567 or 1122',
+                prefixIcon: const Icon(Icons.phone_in_talk_rounded),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.check_circle_rounded, color: AppColors.safeGreenDark),
+                  tooltip: 'Save number',
+                  onPressed: () {
+                    state.updateButtonConfig(
+                      config.copyWith(targetMemberId: _phoneCtrl.text.trim()),
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Saved "${_phoneCtrl.text.trim()}" as emergency call number!'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
               onChanged: (val) {
                 state.updateButtonConfig(
-                  config.copyWith(targetMemberId: val),
+                  config.copyWith(targetMemberId: val.trim()),
                 );
               },
             ),

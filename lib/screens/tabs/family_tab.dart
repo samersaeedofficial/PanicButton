@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/app_state_provider.dart';
@@ -29,131 +30,174 @@ class FamilyTab extends StatelessWidget {
     final passCtrl = TextEditingController();
     bool obscurePass = true;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: EdgeInsets.only(
-            top: 24,
-            left: 24,
-            right: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Add Family Member / Guardian',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'This person will receive your live GPS alerts and can log into the Member app.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                TextField(
-                  controller: relationCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Relationship (e.g. Father, Sister, Friend)',
-                    prefixIcon: Icon(Icons.favorite_outline_rounded),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Emergency Phone Number',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                TextField(
-                  controller: emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Member Login Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                TextField(
-                  controller: passCtrl,
-                  obscureText: obscurePass,
-                  decoration: InputDecoration(
-                    labelText: 'Member Login Password',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        builder: (ctx, setModalState) => Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.person_add_rounded, color: AppColors.primary, size: 24),
                       ),
-                      onPressed: () => setModalState(() => obscurePass = !obscurePass),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Add Guardian Member',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Receives SOS & live tracking updates',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  TextField(
+                    controller: nameCtrl,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      hintText: 'e.g. John Doe',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 14),
 
-                FilledButton(
-                  onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty ||
-                        phoneCtrl.text.trim().isEmpty ||
-                        emailCtrl.text.trim().isEmpty ||
-                        passCtrl.text.isEmpty) {
-                      return;
-                    }
-                    await context.read<AppStateProvider>().addFamilyMember(
-                          name: nameCtrl.text,
-                          relation: relationCtrl.text.isEmpty ? 'Family' : relationCtrl.text,
-                          phone: phoneCtrl.text,
-                          email: emailCtrl.text,
-                          password: passCtrl.text,
-                        );
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  TextField(
+                    controller: relationCtrl,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Relationship (e.g. Father, Sister, Friend)',
+                      hintText: 'Family',
+                      prefixIcon: Icon(Icons.favorite_outline_rounded),
+                    ),
                   ),
-                  child: const Text('Save Guardian Member'),
-                ),
-              ],
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: phoneCtrl,
+                    textInputAction: TextInputAction.next,
+                    keyboardType: TextInputType.text,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+ \-\(\)]')),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Emergency Phone Number',
+                      hintText: 'e.g. +923001234567 or 03001234567',
+                      prefixIcon: Icon(Icons.phone_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: emailCtrl,
+                    textInputAction: TextInputAction.next,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Member Login Email',
+                      hintText: 'member@example.com',
+                      prefixIcon: Icon(Icons.mail_outline_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextField(
+                    controller: passCtrl,
+                    obscureText: obscurePass,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      labelText: 'Member Login Password',
+                      hintText: 'Password for Member App',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        ),
+                        onPressed: () => setModalState(() => obscurePass = !obscurePass),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () async {
+                            if (nameCtrl.text.trim().isEmpty ||
+                                phoneCtrl.text.trim().isEmpty ||
+                                emailCtrl.text.trim().isEmpty ||
+                                passCtrl.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please fill all fields to save guardian.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                            await context.read<AppStateProvider>().addFamilyMember(
+                                  name: nameCtrl.text,
+                                  relation: relationCtrl.text.isEmpty ? 'Family' : relationCtrl.text,
+                                  phone: phoneCtrl.text,
+                                  email: emailCtrl.text,
+                                  password: passCtrl.text,
+                                );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Save Guardian'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -238,7 +282,7 @@ class FamilyTab extends StatelessWidget {
                     const SizedBox(height: 18),
                     FilledButton.icon(
                       onPressed: () => _showAddMemberModal(context),
-                      icon: const Icon(Icons.add),
+                      icon: const Icon(Icons.add_rounded),
                       label: const Text('Add Guardian'),
                       style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
                     ),

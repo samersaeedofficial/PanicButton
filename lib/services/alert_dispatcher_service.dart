@@ -78,11 +78,14 @@ class AlertDispatcherService {
         if (target != null) {
           message = 'Calling ${target.name} (${target.phone})';
           await _dialPhone(target.phone);
+        } else if (config.targetMemberId != null && config.targetMemberId!.trim().isNotEmpty) {
+          message = 'Calling Emergency Number (${config.targetMemberId})';
+          await _dialPhone(config.targetMemberId!.trim());
         } else if (members.isNotEmpty) {
           message = 'Calling ${members.first.name} (${members.first.phone})';
           await _dialPhone(members.first.phone);
         } else {
-          message = 'Call action triggered (no family member configured).';
+          message = 'Call action triggered (no family member or phone number configured).';
         }
         break;
     }
