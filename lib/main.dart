@@ -6,6 +6,7 @@ import 'screens/login_screen.dart';
 import 'screens/member_home_screen.dart';
 import 'screens/user_home_screen.dart';
 import 'services/background_service.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,15 +28,34 @@ class PanicButtonApp extends StatelessWidget {
     return MaterialApp(
       title: 'PanicButton',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red.shade700),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
       home: Consumer<AppStateProvider>(
         builder: (context, state, _) {
           if (!state.isInitialized) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: AppColors.sosGradient,
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.shield_rounded, color: Colors.white, size: 30),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ),
+              ),
             );
           }
 

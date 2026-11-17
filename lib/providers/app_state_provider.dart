@@ -32,7 +32,7 @@ class AppStateProvider extends ChangeNotifier {
   bool _backgroundServiceRunning = false;
   bool _isInitialized = false;
 
-  Map<ButtonPressType, ButtonActionConfig> _buttonConfigs = {
+  final Map<ButtonPressType, ButtonActionConfig> _buttonConfigs = {
     ButtonPressType.single: const ButtonActionConfig(
       pressType: ButtonPressType.single,
       actionType: ButtonActionType.safeCheckIn,
@@ -72,33 +72,38 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    await locationService.init();
-    await hardwareService.init();
-    _currentUser = await authService.getSavedUser();
-    await _loadButtonConfigs();
-    await refreshData();
+    try {
+      await locationService.init();
+      await hardwareService.init();
+      _currentUser = await authService.getSavedUser();
+      await _loadButtonConfigs();
+      await refreshData();
 
-    _hwSub = hardwareService.statusStream.listen((status) {
-      _hardwareStatus = status;
+      _hwSub = hardwareService.statusStream.listen((status) {
+        _hardwareStatus = status;
+        notifyListeners();
+      });
+
+      _btnSub = hardwareService.buttonPressStream.listen((pressType) async {
+        final config = _buttonConfigs[pressType];
+        if (config != null) {
+          await triggerButtonAction(config);
+        }
+      });
+
+      _snatchSub = hardwareService.antiSnatchStream.listen((_) async {
+        final log = await alertDispatcher.dispatchAntiSnatch(_members);
+        _logs.insert(0, log);
+        notifyListeners();
+      });
+
+      _currentLocation = await locationService.getBestAvailableLocation();
+    } catch (_) {
+      // Ensure app still opens if a mobile-only plugin is unavailable on desktop
+    } finally {
+      _isInitialized = true;
       notifyListeners();
-    });
-
-    _btnSub = hardwareService.buttonPressStream.listen((pressType) async {
-      final config = _buttonConfigs[pressType];
-      if (config != null) {
-        await triggerButtonAction(config);
-      }
-    });
-
-    _snatchSub = hardwareService.antiSnatchStream.listen((_) async {
-      final log = await alertDispatcher.dispatchAntiSnatch(_members);
-      _logs.insert(0, log);
-      notifyListeners();
-    });
-
-    _currentLocation = await locationService.getBestAvailableLocation();
-    _isInitialized = true;
-    notifyListeners();
+    }
   }
 
   Future<void> refreshData() async {

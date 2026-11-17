@@ -3,182 +3,196 @@ import 'package:provider/provider.dart';
 import '../../models/button_action_config.dart';
 import '../../models/hardware_status.dart';
 import '../../providers/app_state_provider.dart';
+import '../../theme/app_theme.dart';
 
-class DashboardTab extends StatelessWidget {
+class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
+
+  @override
+  State<DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<DashboardTab> {
+  bool _simulatorExpanded = false;
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppStateProvider>();
     final hw = state.hardwareStatus;
     final loc = state.currentLocation;
+    final userName = state.currentUser?.name ?? 'Guardian User';
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       children: [
-        // Hardware Status Card (Requirement 11)
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+        // Top Greeting & Connection Banner
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      hw.isConnected
-                          ? Icons.bluetooth_connected
-                          : Icons.bluetooth_disabled,
-                      color: hw.isConnected ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        hw.deviceName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Chip(
-                      label: Text(
-                        hw.isConnected ? 'Connected' : 'Disconnected',
-                        style: TextStyle(
-                          color: hw.isConnected
-                              ? Colors.green.shade900
-                              : Colors.red.shade900,
-                          fontSize: 12,
-                        ),
-                      ),
-                      backgroundColor: hw.isConnected
-                          ? Colors.green.shade100
-                          : Colors.red.shade100,
-                    ),
-                  ],
-                ),
-                const Divider(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _StatusMetric(
-                      icon: Icons.wifi,
-                      label: 'Mode',
-                      value: hw.mode.label,
-                    ),
-                    _StatusMetric(
-                      icon: Icons.satellite_alt,
-                      label: 'GPS Satellites',
-                      value: '${hw.satelliteCount} sats',
-                    ),
-                    _StatusMetric(
-                      icon: Icons.battery_charging_full,
-                      label: 'Battery',
-                      value: '${hw.batteryPercent}%',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10),
+                Text(
+                  'Hello, $userName',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: AppColors.textPrimary,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.my_location, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          loc != null
-                              ? '${loc.latitude.toStringAsFixed(5)}, ${loc.longitude.toStringAsFixed(5)}'
-                                  '${loc.isLastKnownFallback ? ' (Last Known Outdoor)' : ''}'
-                              : 'Acquiring GPS...',
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hw.isConnected
+                      ? 'ESP32 Device Protected • Active'
+                      : 'ESP32 Standby • Auto-reconnecting...',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: hw.isConnected ? AppColors.safeGreenDark : AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
+            _ConnectionStatusPill(isConnected: hw.isConnected, mode: hw.mode),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        // 1. HARDWARE STATUS CARD (Requirement 11, 1, 12)
+        _HardwareStatusCard(hw: hw, loc: loc),
+
+        const SizedBox(height: 24),
+
+        // 2. HERO SOS EMERGENCY SECTION
+        const Text(
+          'Emergency & Safety Actions',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // Quick Emergency & Check-in Controls
+        // Large Hero SOS Button (Long Press trigger / Manual tap)
+        _HeroSosButton(
+          onTap: () async {
+            final config = state.buttonConfigs[ButtonPressType.longPress]!;
+            final log = await state.triggerButtonAction(config);
+            if (context.mounted) {
+              _showActionFeedback(context, log.message, AppColors.primary);
+            }
+          },
+        ),
+
+        const SizedBox(height: 14),
+
+        // 3. DUAL QUICK ACTION CARDS (Safe Check-in & Silent SOS)
         Row(
           children: [
+            // Safe Check-in (Requirement 14)
             Expanded(
-              child: FilledButton.icon(
-                onPressed: () => state.triggerButtonAction(
-                  state.buttonConfigs[ButtonPressType.longPress]!,
-                ),
-                icon: const Icon(Icons.warning_amber_rounded),
-                label: const Text('SOS SIREN'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
+              child: _QuickActionCard(
+                title: 'Safe Check-in',
+                subtitle: 'Single Click • "Reached Safely"',
+                icon: Icons.check_circle_rounded,
+                gradient: AppColors.safeGradient,
+                accentColor: AppColors.safeGreen,
+                onTap: () async {
+                  final config = state.buttonConfigs[ButtonPressType.single]!;
+                  await state.triggerButtonAction(config);
+                  if (context.mounted) {
+                    _showActionFeedback(context, 'Safe Check-in Sent to Family!', AppColors.safeGreenDark);
+                  }
+                },
               ),
             ),
             const SizedBox(width: 12),
+            // Silent / Stealth SOS (Requirement 15)
             Expanded(
-              child: FilledButton.icon(
-                onPressed: () => state.triggerButtonAction(
-                  state.buttonConfigs[ButtonPressType.single]!,
-                ),
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('SAFE CHECK-IN'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green.shade700,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
+              child: _QuickActionCard(
+                title: 'Silent SOS',
+                subtitle: 'Double Click • Stealth Tracking',
+                icon: Icons.visibility_off_rounded,
+                gradient: AppColors.silentGradient,
+                accentColor: AppColors.silentAmber,
+                onTap: () async {
+                  final config = state.buttonConfigs[ButtonPressType.doublePress]!;
+                  await state.triggerButtonAction(config);
+                  if (context.mounted) {
+                    _showActionFeedback(context, 'Silent SOS Sent Discreetly!', AppColors.silentAmberDark);
+                  }
+                },
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: () => state.triggerButtonAction(
-            state.buttonConfigs[ButtonPressType.doublePress]!,
-          ),
-          icon: const Icon(Icons.visibility_off_outlined),
-          label: const Text('Silent / Stealth SOS (No Buzzer)'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-        ),
-        const SizedBox(height: 16),
 
-        // Location Sharing & Anti-Snatch Controls
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+        const SizedBox(height: 20),
+
+        // 4. LOCATION SHARING & ANTI-SNATCH GUARDS
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             children: [
-              SwitchListTile(
-                title: const Text('Continuous Real-Time Location'),
-                subtitle: const Text(
-                  'Share live GPS wherever you go',
+              // Continuous Live Sharing Switch
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBlue.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.share_location_rounded, color: AppColors.infoBlue, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Real-Time Live Location',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                          ),
+                          Text(
+                            state.continuousLocationSharing
+                                ? 'Broadcasting live coordinates continuously'
+                                : 'Share live GPS updates to family members',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: state.continuousLocationSharing,
+                      activeThumbColor: AppColors.infoBlue,
+                      onChanged: state.toggleContinuousLocationSharing,
+                    ),
+                  ],
                 ),
-                value: state.continuousLocationSharing,
-                onChanged: state.toggleContinuousLocationSharing,
-                secondary: const Icon(Icons.share_location),
               ),
-              if (!state.continuousLocationSharing)
+
+              // Instant Single Share Button if continuous is off
+              if (!state.continuousLocationSharing) ...[
+                const Divider(height: 1, color: AppColors.borderLight),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                   child: SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -190,104 +204,377 @@ class DashboardTab extends StatelessWidget {
                           ),
                         );
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Location shared with members!'),
-                            ),
-                          );
+                          _showActionFeedback(context, 'Current GPS Location Shared!', AppColors.infoBlue);
                         }
                       },
-                      icon: const Icon(Icons.send),
-                      label: const Text('Share Current Location Once'),
+                      icon: const Icon(Icons.send_rounded, size: 16, color: AppColors.infoBlue),
+                      label: const Text(
+                        'Share Current Location Once',
+                        style: TextStyle(color: AppColors.infoBlue, fontWeight: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.infoBlue.withValues(alpha: 0.3)),
+                        backgroundColor: AppColors.infoBlue.withValues(alpha: 0.05),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
                 ),
-              const Divider(height: 1),
-              SwitchListTile(
-                title: const Text('Anti-Snatch / Disconnect Alert'),
-                subtitle: const Text(
-                  'Trigger alert if ESP32 disconnects unexpectedly',
+              ],
+
+              const Divider(height: 1, color: AppColors.borderLight),
+
+              // Anti-Snatch Disconnect Alert
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.snatchPurple.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.phonelink_erase_rounded, color: AppColors.snatchPurple, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Anti-Snatch / Theft Alert',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                          ),
+                          const Text(
+                            'Triggers instant alert if ESP32 disconnects suddenly',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: state.hardwareService.antiSnatchArmed,
+                      activeThumbColor: AppColors.snatchPurple,
+                      onChanged: state.toggleAntiSnatch,
+                    ),
+                  ],
                 ),
-                value: state.hardwareService.antiSnatchArmed,
-                onChanged: state.toggleAntiSnatch,
-                secondary: const Icon(Icons.phonelink_erase),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
 
-        // ESP32 Hardware Simulator (for testing without physical ESP32)
-        Card(
-          color: Colors.blueGrey.shade50,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+        const SizedBox(height: 20),
+
+        // 5. ESP32 HARDWARE SIMULATION DRAWER
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderLight),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'ESP32 Hardware Simulator',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: () => setState(() => _simulatorExpanded = !_simulatorExpanded),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.developer_board_rounded, color: AppColors.textPrimary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ESP32 Hardware Simulator',
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            Text(
+                              'Test click actions, WiFi/BLE bridges & anti-snatch',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        _simulatorExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ActionChip(
-                      label: const Text('Connect BLE'),
-                      onPressed: () => state.hardwareService.simulateConnect(
-                        mode: ConnectionMode.bluetooth,
+              ),
+              if (_simulatorExpanded) ...[
+                const Divider(height: 1, color: AppColors.borderLight),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.bluetooth, size: 16, color: Colors.blue),
+                        label: const Text('Simulate BLE'),
+                        onPressed: () => state.hardwareService.simulateConnect(
+                          mode: ConnectionMode.bluetooth,
+                        ),
                       ),
-                    ),
-                    ActionChip(
-                      label: const Text('Connect Wi-Fi AP'),
-                      onPressed: () => state.hardwareService.simulateConnect(
-                        mode: ConnectionMode.esp32Ap,
+                      ActionChip(
+                        avatar: const Icon(Icons.wifi, size: 16, color: Colors.teal),
+                        label: const Text('Simulate Wi-Fi AP'),
+                        onPressed: () => state.hardwareService.simulateConnect(
+                          mode: ConnectionMode.esp32Ap,
+                        ),
                       ),
-                    ),
-                    ActionChip(
-                      label: const Text('1x Press'),
-                      onPressed: () => state.hardwareService
-                          .simulateButtonPress(ButtonPressType.single),
-                    ),
-                    ActionChip(
-                      label: const Text('2x Press'),
-                      onPressed: () => state.hardwareService
-                          .simulateButtonPress(ButtonPressType.doublePress),
-                    ),
-                    ActionChip(
-                      label: const Text('Long Press'),
-                      onPressed: () => state.hardwareService
-                          .simulateButtonPress(ButtonPressType.longPress),
-                    ),
-                    ActionChip(
-                      label: const Text('Simulate Snatch'),
-                      onPressed: () =>
-                          state.hardwareService.simulateAntiSnatchDisconnect(),
-                    ),
-                  ],
+                      ActionChip(
+                        avatar: const Icon(Icons.touch_app_outlined, size: 16, color: Colors.green),
+                        label: const Text('1x Click (Safe)'),
+                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.single),
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.double_arrow_rounded, size: 16, color: Colors.orange),
+                        label: const Text('2x Click (Silent)'),
+                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.doublePress),
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.timer_outlined, size: 16, color: Colors.red),
+                        label: const Text('Long Press (Siren)'),
+                        onPressed: () => state.hardwareService.simulateButtonPress(ButtonPressType.longPress),
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.link_off_rounded, size: 16, color: Colors.purple),
+                        label: const Text('Simulate Snatch'),
+                        onPressed: () => state.hardwareService.simulateAntiSnatchDisconnect(),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
+
+        const SizedBox(height: 24),
       ],
+    );
+  }
+
+  void _showActionFeedback(BuildContext context, String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600))),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 }
 
-class _StatusMetric extends StatelessWidget {
+// Modern Hardware Status Card
+class _HardwareStatusCard extends StatelessWidget {
+  final HardwareStatus hw;
+  final dynamic loc;
+
+  const _HardwareStatusCard({required this.hw, required this.loc});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Device Header Row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  hw.isConnected ? Icons.memory_rounded : Icons.memory_outlined,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hw.deviceName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      hw.mode.label,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: hw.isConnected
+                      ? AppColors.safeGreen.withValues(alpha: 0.2)
+                      : Colors.red.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: hw.isConnected ? AppColors.safeGreen : Colors.red,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: hw.isConnected ? AppColors.safeGreen : Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      hw.isConnected ? 'ONLINE' : 'STANDBY',
+                      style: TextStyle(
+                        color: hw.isConnected ? AppColors.safeGreen : Colors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+          const SizedBox(height: 18),
+
+          // Telemetry Row: Battery, Satellites, Signal
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _TelemetryTile(
+                icon: Icons.battery_charging_full_rounded,
+                iconColor: hw.batteryPercent > 20 ? AppColors.safeGreen : Colors.orange,
+                title: 'Battery',
+                value: '${hw.batteryPercent}%',
+              ),
+              Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.1)),
+              _TelemetryTile(
+                icon: Icons.satellite_alt_rounded,
+                iconColor: AppColors.infoBlue,
+                title: 'GPS Signal',
+                value: '${hw.satelliteCount} Sats',
+              ),
+              Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.1)),
+              _TelemetryTile(
+                icon: Icons.cell_tower_rounded,
+                iconColor: Colors.amber,
+                title: 'Link Bridge',
+                value: hw.mode == ConnectionMode.bluetooth ? 'BLE 5.0' : 'Wi-Fi AP',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Live Coordinates Chip / Last Known Outdoor Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  loc?.isLastKnownFallback == true
+                      ? Icons.history_rounded
+                      : Icons.my_location_rounded,
+                  color: loc?.isLastKnownFallback == true ? Colors.amber : Colors.white,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    loc != null
+                        ? '${loc.latitude.toStringAsFixed(5)}, ${loc.longitude.toStringAsFixed(5)}'
+                            '${loc.isLastKnownFallback ? ' (Last Known Outdoor)' : ' (Live Accurate)'}'
+                        : 'Searching for GPS Lock...',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TelemetryTile extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final Color iconColor;
+  final String title;
   final String value;
 
-  const _StatusMetric({
+  const _TelemetryTile({
     required this.icon,
-    required this.label,
+    required this.iconColor,
+    required this.title,
     required this.value,
   });
 
@@ -295,14 +582,220 @@ class _StatusMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, size: 20, color: Colors.blueGrey),
+        Icon(icon, color: iconColor, size: 22),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.6),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         Text(
           value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
+    );
+  }
+}
+
+// Hero Circular Glowing SOS Button
+class _HeroSosButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _HeroSosButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppColors.sosGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.45),
+                    blurRadius: 28,
+                    spreadRadius: 6,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 48),
+                    SizedBox(height: 4),
+                    Text(
+                      'SOS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'LOUD EMERGENCY SIREN',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDark,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Triggers loud hardware alarm, live audio recording & instant SOS dispatch',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Dual Quick Action Cards (Check-in & Stealth)
+class _QuickActionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final LinearGradient gradient;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.gradient,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Small Connection Status Pill
+class _ConnectionStatusPill extends StatelessWidget {
+  final bool isConnected;
+  final ConnectionMode mode;
+
+  const _ConnectionStatusPill({required this.isConnected, required this.mode});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isConnected ? AppColors.safeGreen.withValues(alpha: 0.12) : Colors.red.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_disabled_rounded,
+            size: 16,
+            color: isConnected ? AppColors.safeGreenDark : Colors.red.shade700,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            isConnected ? 'Connected' : 'Offline',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isConnected ? AppColors.safeGreenDark : Colors.red.shade700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -40,8 +41,16 @@ class BackgroundMonitorService {
 
   static Future<void> initialize() async {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidInit);
+    const linuxInit = LinuxInitializationSettings(
+      defaultActionName: 'Open PanicButton',
+    );
+    const initSettings = InitializationSettings(
+      android: androidInit,
+      linux: linuxInit,
+    );
     await _notifications.initialize(settings: initSettings);
+
+    if (!Platform.isAndroid && !Platform.isIOS) return;
 
     final service = FlutterBackgroundService();
     await service.configure(

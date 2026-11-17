@@ -24,9 +24,7 @@ class HardwareService {
   HardwareStatus _currentStatus = HardwareStatus(lastUpdated: DateTime.now());
   HardwareStatus get currentStatus => _currentStatus;
 
-  bool _antiSnatchArmed = true;
-  bool get antiSnatchArmed => _antiSnatchArmed;
-  set antiSnatchArmed(bool value) => _antiSnatchArmed = value;
+  bool antiSnatchArmed = true;
 
   BluetoothDevice? _connectedBleDevice;
   StreamSubscription<BluetoothAdapterState>? _bleStateSub;
@@ -200,7 +198,7 @@ class HardwareService {
         lastUpdated: DateTime.now(),
       ),
     );
-    if (wasConnected && _antiSnatchArmed) {
+    if (wasConnected && antiSnatchArmed) {
       _antiSnatchController.add(null);
     }
   }
