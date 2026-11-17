@@ -20,6 +20,7 @@ class MapTab extends StatefulWidget {
 class _MapTabState extends State<MapTab> {
   final MapController _mapController = MapController();
   MapLayerType _selectedLayer = MapLayerType.googleRoadmap;
+  bool _showOverlays = true;
 
   void _recenter(LatLng point) {
     _mapController.move(point, 16.5);
@@ -160,11 +161,12 @@ class _MapTabState extends State<MapTab> {
         ),
 
         // Floating Top Status Header (Google Find My Device style)
-        Positioned(
-          top: 16,
-          left: 16,
-          right: 16,
-          child: Container(
+        if (_showOverlays)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -252,12 +254,30 @@ class _MapTabState extends State<MapTab> {
           ),
         ),
 
-        // Floating Map Controls on Right Side (Zoom + Layer Toggle + Recenter)
+        // Floating Map Controls on Right Side (Fullscreen + Zoom + Layer Toggle + Recenter)
         Positioned(
           right: 16,
-          top: 86,
+          top: _showOverlays ? 86 : 16,
           child: Column(
             children: [
+              // Fullscreen Toggle Button (Hides top and bottom bars)
+              FloatingActionButton.small(
+                heroTag: 'map_fullscreen_toggle',
+                backgroundColor: _showOverlays ? Colors.white : const Color(0xFF1A73E8),
+                foregroundColor: _showOverlays ? AppColors.textPrimary : Colors.white,
+                elevation: 3,
+                tooltip: _showOverlays ? 'Full Map View (Hide Bars)' : 'Show Info Bars',
+                onPressed: () {
+                  setState(() => _showOverlays = !_showOverlays);
+                },
+                child: Icon(
+                  _showOverlays ? Icons.fullscreen_rounded : Icons.fullscreen_exit_rounded,
+                  size: 22,
+                  color: _showOverlays ? const Color(0xFF1A73E8) : Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+
               // Map Style Switcher (Roadmap vs Satellite)
               FloatingActionButton.small(
                 heroTag: 'map_layer_toggle',
@@ -323,11 +343,12 @@ class _MapTabState extends State<MapTab> {
         ),
 
         // Google Find My Device Style Bottom Sheet Card
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 16,
-          child: Container(
+        if (_showOverlays)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
