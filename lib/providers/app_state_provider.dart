@@ -276,6 +276,36 @@ class AppStateProvider extends ChangeNotifier {
       members: _members,
     );
     _logs.insert(0, log);
+    if (log.latitude != null && log.longitude != null) {
+      _currentLocation = LocationSnapshot(
+        latitude: log.latitude!,
+        longitude: log.longitude!,
+        accuracy: 10.0,
+        timestamp: log.timestamp,
+        isLastKnownFallback: log.isLastKnownLocation,
+      );
+      _addRoutePoint(log.latitude!, log.longitude!);
+    }
+    notifyListeners();
+    return log;
+  }
+
+  Future<AlertLog> shareCurrentLocationOnce() async {
+    final loc = await locationService.getBestAvailableLocation();
+    if (loc != null) {
+      _currentLocation = loc;
+      _addRoutePoint(loc.latitude, loc.longitude);
+      notifyListeners();
+    }
+    const config = ButtonActionConfig(
+      pressType: ButtonPressType.single,
+      actionType: ButtonActionType.shareLocation,
+    );
+    final log = await alertDispatcher.dispatchAction(
+      config: config,
+      members: _members,
+    );
+    _logs.insert(0, log);
     notifyListeners();
     return log;
   }

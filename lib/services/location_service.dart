@@ -89,22 +89,30 @@ class LocationService {
         return _lastKnownOutdoorLocation;
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 6),
-        ),
-      );
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            timeLimit: Duration(seconds: 4),
+          ),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
 
-      _currentLocation = LocationSnapshot(
-        latitude: pos.latitude,
-        longitude: pos.longitude,
-        accuracy: pos.accuracy,
-        timestamp: DateTime.now(),
-        isLastKnownFallback: false,
-      );
-      await _saveLastKnownOutdoor(pos);
-      return _currentLocation;
+      if (pos != null) {
+        _currentLocation = LocationSnapshot(
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          timestamp: DateTime.now(),
+          isLastKnownFallback: false,
+        );
+        await _saveLastKnownOutdoor(pos);
+        return _currentLocation;
+      }
+      return _currentLocation ?? _lastKnownOutdoorLocation;
     } catch (_) {
       // If GPS fails (e.g., inside basement/building), return Last Known Outdoor Location
       return _currentLocation ?? _lastKnownOutdoorLocation;

@@ -65,69 +65,113 @@ class _DashboardTabState extends State<DashboardTab> {
 
         const SizedBox(height: 24),
 
-        // 2. HERO SOS EMERGENCY SECTION
-        const Text(
-          'Emergency & Safety Actions',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+        // 2. HERO SOS EMERGENCY SECTION (Dynamically reflects Long Press Trigger setting)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Emergency & Safety Actions',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: const Text(
+                'Custom Triggers Active',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
-        // Large Hero SOS Button (Long Press trigger / Manual tap)
+        // Large Hero SOS Button (Dynamically configured by user in Triggers / Settings)
         _HeroSosButton(
+          config: state.buttonConfigs[ButtonPressType.longPress] ??
+              const ButtonActionConfig(
+                pressType: ButtonPressType.longPress,
+                actionType: ButtonActionType.loudSiren,
+                holdDurationSeconds: 2,
+              ),
           onTap: () async {
             final config = state.buttonConfigs[ButtonPressType.longPress]!;
-            await state.triggerButtonAction(config);
+            final log = await state.triggerButtonAction(config);
             if (context.mounted) {
-              _showActionFeedback(context, 'LOUD EMERGENCY SIREN TRIGGERED!', AppColors.primary);
+              _showActionFeedback(context, '${config.actionType.shortTitle}: ${log.message}', config.actionType.color);
             }
           },
         ),
 
         const SizedBox(height: 14),
 
-        // 3. DUAL QUICK ACTION CARDS (Safe Check-in & Silent SOS)
-        Row(
-          children: [
-            // Safe Check-in (Requirement 14)
-            Expanded(
-              child: _QuickActionCard(
-                title: 'Safe Check-in',
-                subtitle: 'Single Click • "Reached Safely"',
-                icon: Icons.check_circle_rounded,
-                gradient: AppColors.safeGradient,
-                accentColor: AppColors.safeGreen,
-                onTap: () async {
-                  final config = state.buttonConfigs[ButtonPressType.single]!;
-                  await state.triggerButtonAction(config);
-                  if (context.mounted) {
-                    _showActionFeedback(context, 'Safe Check-in Sent to Family!', AppColors.safeGreenDark);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Silent / Stealth SOS (Requirement 15)
-            Expanded(
-              child: _QuickActionCard(
-                title: 'Silent SOS',
-                subtitle: 'Double Click • Stealth Tracking',
-                icon: Icons.visibility_off_rounded,
-                gradient: AppColors.silentGradient,
-                accentColor: AppColors.silentAmber,
-                onTap: () async {
-                  final config = state.buttonConfigs[ButtonPressType.doublePress]!;
-                  await state.triggerButtonAction(config);
-                  if (context.mounted) {
-                    _showActionFeedback(context, 'Silent SOS Sent Discreetly!', AppColors.silentAmberDark);
-                  }
-                },
-              ),
-            ),
-          ],
+        // 3. DUAL QUICK ACTION CARDS (Dynamically reflect 1x Click & 2x Click settings)
+        Builder(
+          builder: (context) {
+            final singleConfig = state.buttonConfigs[ButtonPressType.single] ??
+                const ButtonActionConfig(
+                  pressType: ButtonPressType.single,
+                  actionType: ButtonActionType.safeCheckIn,
+                );
+            final doubleConfig = state.buttonConfigs[ButtonPressType.doublePress] ??
+                const ButtonActionConfig(
+                  pressType: ButtonPressType.doublePress,
+                  actionType: ButtonActionType.silentSos,
+                );
+
+            return Row(
+              children: [
+                // 1x Click Action Card (Customizable)
+                Expanded(
+                  child: _QuickActionCard(
+                    title: singleConfig.actionType.shortTitle,
+                    subtitle: '1x Click • ${singleConfig.actionType.defaultSubtitle}',
+                    icon: singleConfig.actionType.icon,
+                    gradient: singleConfig.actionType.gradient,
+                    accentColor: singleConfig.actionType.color,
+                    onTap: () async {
+                      final log = await state.triggerButtonAction(singleConfig);
+                      if (context.mounted) {
+                        _showActionFeedback(
+                          context,
+                          '1x Click: ${log.message}',
+                          singleConfig.actionType.color,
+                        );
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 2x Click Action Card (Customizable)
+                Expanded(
+                  child: _QuickActionCard(
+                    title: doubleConfig.actionType.shortTitle,
+                    subtitle: '2x Click • ${doubleConfig.actionType.defaultSubtitle}',
+                    icon: doubleConfig.actionType.icon,
+                    gradient: doubleConfig.actionType.gradient,
+                    accentColor: doubleConfig.actionType.color,
+                    onTap: () async {
+                      final log = await state.triggerButtonAction(doubleConfig);
+                      if (context.mounted) {
+                        _showActionFeedback(
+                          context,
+                          '2x Click: ${log.message}',
+                          doubleConfig.actionType.color,
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         ),
 
         const SizedBox(height: 20),
@@ -197,14 +241,16 @@ class _DashboardTabState extends State<DashboardTab> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        await state.triggerButtonAction(
-                          const ButtonActionConfig(
-                            pressType: ButtonPressType.single,
-                            actionType: ButtonActionType.shareLocation,
-                          ),
-                        );
+                        final log = await state.shareCurrentLocationOnce();
                         if (context.mounted) {
-                          _showActionFeedback(context, 'Current GPS Location Shared!', AppColors.infoBlue);
+                          final coordsStr = log.latitude != null && log.longitude != null
+                              ? ' (${log.latitude!.toStringAsFixed(4)}, ${log.longitude!.toStringAsFixed(4)})'
+                              : '';
+                          _showActionFeedback(
+                            context,
+                            'Live Phone Location Shared with Family!$coordsStr',
+                            AppColors.infoBlue,
+                          );
                         }
                       },
                       icon: const Icon(Icons.send_rounded, size: 16, color: AppColors.infoBlue),
@@ -671,14 +717,27 @@ class _TelemetryTile extends StatelessWidget {
   }
 }
 
-// Hero Circular Glowing SOS Button
+// Hero Dynamic Action Button (Reflects Long Press setting)
 class _HeroSosButton extends StatelessWidget {
+  final ButtonActionConfig config;
   final VoidCallback onTap;
 
-  const _HeroSosButton({required this.onTap});
+  const _HeroSosButton({
+    required this.config,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final action = config.actionType;
+    final color = action.color;
+    final gradient = action.gradient;
+    final centerWord = action == ButtonActionType.loudSiren
+        ? 'SOS'
+        : (action == ButtonActionType.callMember
+            ? 'CALL'
+            : (action == ButtonActionType.safeCheckIn ? 'SAFE' : 'ALERT'));
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(24),
@@ -693,7 +752,7 @@ class _HeroSosButton extends StatelessWidget {
             border: Border.all(color: AppColors.borderLight),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.08),
+                color: color.withValues(alpha: 0.1),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -707,27 +766,27 @@ class _HeroSosButton extends StatelessWidget {
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: AppColors.sosGradient,
+                  gradient: gradient,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.45),
+                      color: color.withValues(alpha: 0.45),
                       blurRadius: 28,
                       spreadRadius: 6,
                       offset: const Offset(0, 10),
                     ),
                   ],
                 ),
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 48),
-                      SizedBox(height: 4),
+                      Icon(action.icon, color: Colors.white, size: 48),
+                      const SizedBox(height: 4),
                       Text(
-                        'SOS',
-                        style: TextStyle(
+                        centerWord,
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2,
                         ),
@@ -737,20 +796,20 @@ class _HeroSosButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              const Text(
-                'LOUD EMERGENCY SIREN',
+              Text(
+                action.shortTitle.toUpperCase(),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.primaryDark,
+                  color: color,
                   letterSpacing: 0.5,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Tap here or long press hardware button to sound loud siren & dispatch SOS',
+              Text(
+                'Long Press (${config.holdDurationSeconds}s) • ${action.defaultSubtitle}',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
           ),
