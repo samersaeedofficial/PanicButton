@@ -8,6 +8,8 @@ import '../../models/hardware_status.dart';
 import '../../providers/app_state_provider.dart';
 import '../../theme/app_theme.dart';
 
+enum MapLayerType { googleRoadmap, googleSatellite, googleTerrain }
+
 class MapTab extends StatefulWidget {
   const MapTab({super.key});
 
@@ -17,9 +19,34 @@ class MapTab extends StatefulWidget {
 
 class _MapTabState extends State<MapTab> {
   final MapController _mapController = MapController();
+  MapLayerType _selectedLayer = MapLayerType.googleRoadmap;
 
   void _recenter(LatLng point) {
     _mapController.move(point, 16.5);
+  }
+
+  void _zoomIn() {
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(_mapController.camera.center, currentZoom + 1);
+  }
+
+  void _zoomOut() {
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(_mapController.camera.center, currentZoom - 1);
+  }
+
+  String _getTileUrl() {
+    switch (_selectedLayer) {
+      case MapLayerType.googleRoadmap:
+        // Real Google Maps clean standard roadmap with labels & streets
+        return 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+      case MapLayerType.googleSatellite:
+        // Real Google Satellite Hybrid (HD Satellite + Street names)
+        return 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+      case MapLayerType.googleTerrain:
+        // Real Google Maps Terrain clean view
+        return 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}';
+    }
   }
 
   Future<void> _openExternalMap(double lat, double lng) async {
@@ -44,73 +71,84 @@ class _MapTabState extends State<MapTab> {
 
     return Stack(
       children: [
-        // Fullscreen OpenStreetMap layer
+        // Google Maps Clean Tiles Layer
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
             initialCenter: center,
-            initialZoom: 16,
-            minZoom: 4,
-            maxZoom: 19,
+            initialZoom: 16.0,
+            minZoom: 3,
+            maxZoom: 20,
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              key: ValueKey(_selectedLayer),
+              urlTemplate: _getTileUrl(),
+              subdomains: const ['0', '1', '2', '3'],
               userAgentPackageName: 'com.panicbutton.app',
+              maxZoom: 20,
             ),
-            // Accuracy radius circle
+            // Accuracy radius circle (Google Maps style cyan/blue wash)
             CircleLayer(
               circles: [
                 CircleMarker(
                   point: center,
                   radius: loc?.accuracy ?? 35,
                   useRadiusInMeter: true,
-                  color: isOutdoorFallback
-                      ? Colors.amber.withValues(alpha: 0.18)
-                      : AppColors.infoBlue.withValues(alpha: 0.18),
-                  borderColor: isOutdoorFallback ? Colors.amber : AppColors.infoBlue,
+                  color: (isOutdoorFallback ? Colors.amber : const Color(0xFF4285F4))
+                      .withValues(alpha: 0.18),
+                  borderColor: isOutdoorFallback ? Colors.amber : const Color(0xFF1A73E8),
                   borderStrokeWidth: 1.5,
                 ),
               ],
             ),
-            // Find My Device Pulsing Radar Marker
+            // Google Find My Device Live Pulsing Pin Marker
             MarkerLayer(
               markers: [
                 Marker(
                   point: center,
-                  width: 54,
-                  height: 54,
+                  width: 58,
+                  height: 58,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // Outer pulse ring
                       Container(
-                        width: 50,
-                        height: 50,
+                        width: 54,
+                        height: 54,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: (isOutdoorFallback ? Colors.amber : AppColors.primary)
-                              .withValues(alpha: 0.25),
+                              .withValues(alpha: 0.22),
                         ),
                       ),
+                      // Core pin circle with drop shadow
                       Container(
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: isOutdoorFallback ? Colors.amber.shade700 : AppColors.primary,
+                          gradient: isOutdoorFallback
+                              ? null
+                              : const LinearGradient(
+                                  colors: [Color(0xFFEA4335), Color(0xFFC5221F)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                          color: isOutdoorFallback ? Colors.amber.shade700 : null,
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: const [
                             BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 8,
-                              offset: Offset(0, 3),
+                              color: Colors.black38,
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
                             ),
                           ],
                         ),
                         child: const Icon(
                           Icons.person_pin_circle_rounded,
                           color: Colors.white,
-                          size: 20,
+                          size: 24,
                         ),
                       ),
                     ],
@@ -130,12 +168,12 @@ class _MapTabState extends State<MapTab> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppColors.borderLight),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
+                  blurRadius: 18,
                   offset: const Offset(0, 4),
                 ),
               ],
@@ -143,14 +181,22 @@ class _MapTabState extends State<MapTab> {
             child: Row(
               children: [
                 Container(
-                  width: 10,
-                  height: 10,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: hw.isConnected ? AppColors.safeGreen : Colors.orange,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (hw.isConnected ? AppColors.safeGreen : Colors.orange)
+                            .withValues(alpha: 0.4),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,35 +205,124 @@ class _MapTabState extends State<MapTab> {
                       Text(
                         userName,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           fontSize: 14,
                           color: AppColors.textPrimary,
                         ),
                       ),
                       Text(
                         isOutdoorFallback
-                            ? 'Inside building/basement • Using Last Outdoor GPS'
-                            : 'Live GPS Active • ${hw.satelliteCount} Satellites locked',
+                            ? 'Inside building • Using Last Known Outdoor GPS'
+                            : 'Live Google GPS • ${hw.satelliteCount} Satellites locked',
                         style: TextStyle(
                           fontSize: 11,
                           color: isOutdoorFallback ? Colors.amber.shade900 : AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.my_location_rounded, color: AppColors.primary),
-                  tooltip: 'Recenter to device',
-                  onPressed: () => _recenter(center),
+                // Google Maps indicator badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_rounded, size: 14, color: Color(0xFF4285F4)),
+                      const SizedBox(width: 4),
+                      Text(
+                        _selectedLayer == MapLayerType.googleSatellite ? 'Satellite' : 'Google Maps',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A73E8),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
 
-        // Floating Bottom Sheet (Find My Device Info & Controls)
+        // Floating Map Controls on Right Side (Zoom + Layer Toggle + Recenter)
+        Positioned(
+          right: 16,
+          top: 86,
+          child: Column(
+            children: [
+              // Map Style Switcher (Roadmap vs Satellite)
+              FloatingActionButton.small(
+                heroTag: 'map_layer_toggle',
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
+                elevation: 3,
+                tooltip: 'Switch Map Style (Clean / Satellite)',
+                onPressed: () {
+                  setState(() {
+                    if (_selectedLayer == MapLayerType.googleRoadmap) {
+                      _selectedLayer = MapLayerType.googleSatellite;
+                    } else {
+                      _selectedLayer = MapLayerType.googleRoadmap;
+                    }
+                  });
+                },
+                child: Icon(
+                  _selectedLayer == MapLayerType.googleSatellite
+                      ? Icons.layers_rounded
+                      : Icons.satellite_alt_rounded,
+                  size: 20,
+                  color: const Color(0xFF1A73E8),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Zoom In
+              FloatingActionButton.small(
+                heroTag: 'map_zoom_in',
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
+                elevation: 3,
+                tooltip: 'Zoom In',
+                onPressed: _zoomIn,
+                child: const Icon(Icons.add_rounded, size: 20),
+              ),
+              const SizedBox(height: 6),
+
+              // Zoom Out
+              FloatingActionButton.small(
+                heroTag: 'map_zoom_out',
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
+                elevation: 3,
+                tooltip: 'Zoom Out',
+                onPressed: _zoomOut,
+                child: const Icon(Icons.remove_rounded, size: 20),
+              ),
+              const SizedBox(height: 8),
+
+              // Recenter Button
+              FloatingActionButton.small(
+                heroTag: 'map_recenter',
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1A73E8),
+                elevation: 3,
+                tooltip: 'Recenter to device',
+                onPressed: () => _recenter(center),
+                child: const Icon(Icons.my_location_rounded, size: 20),
+              ),
+            ],
+          ),
+        ),
+
+        // Google Find My Device Style Bottom Sheet Card
         Positioned(
           left: 16,
           right: 16,
@@ -245,7 +380,7 @@ class _MapTabState extends State<MapTab> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  isOutdoorFallback ? 'LAST KNOWN' : 'LIVE',
+                                  isOutdoorFallback ? 'LAST OUTDOOR' : 'LIVE ACCURATE',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -278,13 +413,13 @@ class _MapTabState extends State<MapTab> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 16, color: AppColors.textSecondary),
+                      const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFFEA4335)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           loc != null
                               ? '${loc.latitude.toStringAsFixed(5)}, ${loc.longitude.toStringAsFixed(5)}'
-                              : 'Waiting for coordinates...',
+                              : 'Acquiring GPS fix...',
                           style: const TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 12,
@@ -316,7 +451,7 @@ class _MapTabState extends State<MapTab> {
 
                 const SizedBox(height: 16),
 
-                // Bottom Action Buttons
+                // Bottom Action Buttons: Ring Device & Open in Google Maps
                 Row(
                   children: [
                     // Sound Siren Button
@@ -343,9 +478,9 @@ class _MapTabState extends State<MapTab> {
                             ? () => _openExternalMap(loc.latitude, loc.longitude)
                             : null,
                         icon: const Icon(Icons.directions_rounded, size: 18),
-                        label: const Text('Directions'),
+                        label: const Text('Google Maps'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: const Color(0xFF1A73E8),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
