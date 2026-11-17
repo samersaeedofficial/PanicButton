@@ -166,10 +166,13 @@ class FamilyTab extends StatelessWidget {
                       Expanded(
                         child: FilledButton(
                           onPressed: () async {
-                            if (nameCtrl.text.trim().isEmpty ||
-                                phoneCtrl.text.trim().isEmpty ||
-                                emailCtrl.text.trim().isEmpty ||
-                                passCtrl.text.isEmpty) {
+                            final name = nameCtrl.text.trim();
+                            final phone = phoneCtrl.text.trim();
+                            final email = emailCtrl.text.trim();
+                            final password = passCtrl.text;
+                            final relation = relationCtrl.text.trim().isEmpty ? 'Family' : relationCtrl.text.trim();
+
+                            if (name.isEmpty || phone.isEmpty || email.isEmpty || password.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Please fill all fields to save guardian.'),
@@ -178,14 +181,35 @@ class FamilyTab extends StatelessWidget {
                               );
                               return;
                             }
-                            await context.read<AppStateProvider>().addFamilyMember(
-                                  name: nameCtrl.text,
-                                  relation: relationCtrl.text.isEmpty ? 'Family' : relationCtrl.text,
-                                  phone: phoneCtrl.text,
-                                  email: emailCtrl.text,
-                                  password: passCtrl.text,
+
+                            try {
+                              await context.read<AppStateProvider>().addFamilyMember(
+                                    name: name,
+                                    relation: relation,
+                                    phone: phone,
+                                    email: email,
+                                    password: password,
+                                  );
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Guardian "$name" saved successfully!'),
+                                    backgroundColor: AppColors.safeGreenDark,
+                                    duration: const Duration(seconds: 3),
+                                  ),
                                 );
-                            if (ctx.mounted) Navigator.pop(ctx);
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to save guardian: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.primary,

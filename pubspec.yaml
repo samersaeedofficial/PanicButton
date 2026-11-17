@@ -54,6 +54,7 @@ dependencies:
   intl: ^0.20.3
   uuid: ^4.6.0
   path_provider: ^2.1.6
+  sqflite_common_ffi: ^2.4.7
 
 dev_dependencies:
   flutter_test:
